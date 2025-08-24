@@ -1,0 +1,126 @@
+-- Standalone Ultra Fast TriggerBot System
+local TriggerBot = {
+    Enabled = false,
+    Connections = {},
+    BlacklistCache = {}
+}
+
+-- Configuration
+TriggerBot.Settings = {
+    Keybind = 'Q',
+    Prediction = 0.01,
+    Blacklisted = {"Knife"}
+}
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Mouse = Players.LocalPlayer:GetMouse()
+
+-- Pre-cache blacklisted items
+for _, itemName in ipairs(TriggerBot.Settings.Blacklisted) do
+    TriggerBot.BlacklistCache[itemName:lower()] = true
+end
+
+-- Check if tool is blacklisted
+local function IsToolBlacklisted(tool)
+    return tool and TriggerBot.BlacklistCache[tool.Name:lower()]
+end
+
+-- Check if player is valid target
+local function IsValidTarget(player)
+    if not player or player == Players.LocalPlayer then return false end
+    
+    local character = player.Character
+    if not character then return false end
+    
+    local bodyEffects = character:FindFirstChild("BodyEffects")
+    if bodyEffects then
+        local ko = bodyEffects:FindFirstChild("K.O") or bodyEffects:FindFirstChild("KO")
+        if ko and ko.Value then return false end
+    end
+    
+    local humanoid = character:FindFirstChild("Humanoid")
+    if humanoid and humanoid.Health <= 0 then return false end
+    
+    return true
+end
+
+-- Get target player from mouse target
+local function GetTargetFromMouse()
+    local mouseTarget = Mouse.Target
+    if not mouseTarget then return nil end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and mouseTarget:IsDescendantOf(player.Character) then
+            if IsValidTarget(player) then
+                return player, mouseTarget
+            end
+        end
+    end
+    
+    return nil
+end
+
+-- Get equipped tool
+local function GetEquippedTool()
+    local character = Players.LocalPlayer.Character
+    if not character then return nil end
+    
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA("Tool") and not IsToolBlacklisted(tool) then
+            return tool
+        end
+    end
+    
+    return nil
+end
+
+-- Main trigger function
+local function Execute()
+    if not TriggerBot.Enabled then return end
+    
+    local targetPlayer, targetPart = GetTargetFromMouse()
+    if not targetPlayer then return end
+    
+    local tool = GetEquippedTool()
+    if not tool then return end
+    
+    if TriggerBot.Settings.Prediction > 0 then
+        task.wait(TriggerBot.Settings.Prediction)
+    end
+    
+    tool:Activate()
+end
+
+-- Toggle function
+function TriggerBot:Toggle(state)
+    if state ~= nil then
+        self.Enabled = state
+    else
+        self.Enabled = not self.Enabled
+    end
+end
+
+-- Keybind handler
+local function HandleInput(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.UserInputType == Enum.UserInputType.Keyboard and 
+       input.KeyCode == Enum.KeyCode[TriggerBot.Settings.Keybind] then
+        TriggerBot:Toggle()
+    end
+end
+
+-- Initialize the TriggerBot
+TriggerBot.Connections.InputBegan = UserInputService.InputBegan:Connect(HandleInput)
+TriggerBot.Connections.RenderStepped = RunService.RenderStepped:Connect(Execute)
+
+-- Cleanup function
+getgenv().DisableTriggerBot = function()
+    for _, connection in pairs(TriggerBot.Connections) do
+        connection:Disconnect()
+    end
+    TriggerBot.Enabled = false
+end
