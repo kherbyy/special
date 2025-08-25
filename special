@@ -1,28 +1,21 @@
--- 🔴 Unified Roblox Script: ESP, Triggerbot, and VIP Commands
+-- 🔴 Fully Fixed Roblox Script: ESP, Triggerbot, and VIP Commands (Public-Server Ready)
 
--- Core Roblox services
+-- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Camera = workspace.CurrentCamera
-
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
--- Script-wide settings and data structures
--- Add or remove VIP users here. The script will automatically check for case-insensitive matches.
-local VIPUsers = { "draconvm", "K3TCHUPSS" }
+-- Settings
+local VIPUsers = { "draconvm", "gachlasmu6" }
 local BringTargets = {}
 local FrozenPlayers = {}
-local targetedPlayers = {} -- Stores players targeted by the .h command
+local targetedPlayers = {}
 local espObjects = {}
-local lastTargetedPlayerName = nil -- Tracks the last player targeted
+local lastTargetedPlayerName = nil
 
-
---[[ 
-    -- VIP-related functions --
-]]
+-- VIP functions
 local function teleportToPlayer(targetName)
     local targetPlayer = Players:FindFirstChild(targetName)
     local myChar = LocalPlayer.Character
@@ -73,101 +66,67 @@ local function killAllOtherPlayers(senderName)
     end
 end
 
--- FLING FUNCTION (STRONG)
 local function flingPlayer(player)
     if player.Character then
         local root = player.Character:FindFirstChild("HumanoidRootPart")
         if root then
-            local bodyVelocity = Instance.new("BodyVelocity")
-            bodyVelocity.Velocity = Vector3.new(math.random(-1500,1500), 800, math.random(-1500,1500))
-            bodyVelocity.MaxForce = Vector3.new(1e6,1e6,1e6)
-            bodyVelocity.P = 1e5
-            bodyVelocity.Parent = root
-            task.delay(0.3, function() bodyVelocity:Destroy() end)
+            local bv = Instance.new("BodyVelocity")
+            bv.Velocity = Vector3.new(math.random(-1500,1500), 800, math.random(-1500,1500))
+            bv.MaxForce = Vector3.new(1e6,1e6,1e6)
+            bv.P = 1e5
+            bv.Parent = root
+            task.delay(0.3, function() bv:Destroy() end)
         end
     end
 end
 
---[[
-    -- ESP-related functions --
-    These functions handle the creation and removal of ESP objects.
-]]
+-- ESP functions (robust, works for public servers)
 local function addESP(targetPlayer, color)
-    local character = targetPlayer.Character
-    if not character or not character:FindFirstChild("Humanoid") then 
-        return
-    end
+    if espObjects[targetPlayer] then return end
 
-    if espObjects[targetPlayer] then
-        return
-    end
+    local gui = Instance.new("BillboardGui")
+    gui.Size = UDim2.new(0,100,0,20)
+    gui.StudsOffset = Vector3.new(0,2,0)
+    gui.AlwaysOnTop = true
+    gui.Parent = game:GetService("CoreGui")
 
-    local head = character:FindFirstChild("Head")
-    if head then
-        local nameTag = Instance.new("BillboardGui")
-        nameTag.Name = "ESP_NameTag"
-        nameTag.AlwaysOnTop = true
-        nameTag.Size = UDim2.new(0, 100, 0, 20)
-        nameTag.StudsOffset = Vector3.new(0, 2, 0)
-        nameTag.Adornee = head
-        
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Name = "Name"
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Size = UDim2.new(1, 0, 1, 0)
-        nameLabel.TextColor3 = color
-        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-        nameLabel.TextStrokeTransparency = 0.8
-        nameLabel.TextScaled = true
-        nameLabel.Font = Enum.Font.SourceSansBold
-        nameLabel.Text = targetPlayer.Name
-        nameLabel.Parent = nameTag
-        
-        nameTag.Parent = character
-        espObjects[targetPlayer] = nameTag
-    end
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1,0,1,0)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = color
+    label.TextStrokeTransparency = 0.8
+    label.TextStrokeColor3 = Color3.new(0,0,0)
+    label.TextScaled = true
+    label.Font = Enum.Font.SourceSansBold
+    label.Text = targetPlayer.Name
+    label.Parent = gui
+
+    espObjects[targetPlayer] = {Gui = gui, Player = targetPlayer}
+
+    -- Attach to head whenever available (character load / respawn safe)
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        local char = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
+        local head = char and char:FindFirstChild("Head")
+        gui.Adornee = head
+    end)
+    espObjects[targetPlayer].Connection = conn
 end
 
 local function removeESP(targetPlayer)
-    if espObjects[targetPlayer] then
-        espObjects[targetPlayer]:Destroy()
+    local data = espObjects[targetPlayer]
+    if data then
+        if data.Connection then data.Connection:Disconnect() end
+        if data.Gui then data.Gui:Destroy() end
         espObjects[targetPlayer] = nil
     end
 end
 
 local function getColorForPlayer(player)
-    -- You can add custom logic here for team colors if needed.
-    return Color3.fromRGB(255, 255, 255)
+    return Color3.fromRGB(255,255,255)
 end
 
---[[
-    -- Main loops --
-]]
-
--- Main ESP loop
-task.spawn(function()
-    while task.wait() do
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local shouldHaveESP = targetedPlayers[player.Name]
-
-                if shouldHaveESP then
-                    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
-                        local espColor = getColorForPlayer(player)
-                        addESP(player, espColor)
-                    else
-                        removeESP(player)
-                    end
-                else
-                    removeESP(player)
-                end
-            end
-        end
-    end
-end)
-
-
--- SMOOTH BRING LOOP
+-- Smooth bring loop
 RunService.RenderStepped:Connect(function()
     for targetName, _ in pairs(BringTargets) do
         local targetPlayer = Players:FindFirstChild(targetName)
@@ -185,206 +144,127 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
---[[
-    -- Triggerbot System --
-]]
-local TriggerBot = {
-    Enabled = false,
-    Connections = {},
-    BlacklistCache = {}
-}
-
--- Configuration
-TriggerBot.Settings = {
-    Keybind = Enum.KeyCode.Q, -- Use Enum.KeyCode directly
-    Prediction = 0.01,
-    Blacklisted = {"Knife"}
-}
-
--- Pre-cache blacklisted items
-for _, itemName in ipairs(TriggerBot.Settings.Blacklisted) do
-    TriggerBot.BlacklistCache[itemName:lower()] = true
+-- Triggerbot (unchanged)
+local TriggerBot = {Enabled=false, Connections={}, BlacklistCache={}}
+TriggerBot.Settings={Keybind=Enum.KeyCode.Q, Prediction=0.01, Blacklisted={"Knife"}}
+for _,itemName in ipairs(TriggerBot.Settings.Blacklisted) do
+    TriggerBot.BlacklistCache[itemName:lower()]=true
 end
-
--- Check if tool is blacklisted
-local function IsToolBlacklisted(tool)
-    return tool and TriggerBot.BlacklistCache[tool.Name:lower()]
-end
-
--- Check if player is valid target
+local function IsToolBlacklisted(tool) return tool and TriggerBot.BlacklistCache[tool.Name:lower()] end
 local function IsValidTarget(player)
-    if not player or player == Players.LocalPlayer then return false end
-    
-    local character = player.Character
-    if not character then return false end
-    
-    local bodyEffects = character:FindFirstChild("BodyEffects")
-    if bodyEffects then
-        local ko = bodyEffects:FindFirstChild("K.O") or bodyEffects:FindFirstChild("KO")
+    if not player or player == LocalPlayer then return false end
+    local char = player.Character
+    if not char then return false end
+    local be = char:FindFirstChild("BodyEffects")
+    if be then
+        local ko = be:FindFirstChild("K.O") or be:FindFirstChild("KO")
         if ko and ko.Value then return false end
     end
-    
-    local humanoid = character:FindFirstChild("Humanoid")
-    if humanoid and humanoid.Health <= 0 then return false end
-    
+    local hum = char:FindFirstChild("Humanoid")
+    if hum and hum.Health <= 0 then return false end
     return true
 end
-
--- Get target player from mouse target
 local function GetTargetFromMouse()
-    local mouseTarget = Mouse.Target
-    if not mouseTarget then return nil end
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player.Character and mouseTarget:IsDescendantOf(player.Character) then
-            if IsValidTarget(player) then
-                return player, mouseTarget
-            end
+    local target = Mouse.Target
+    if not target then return nil end
+    for _,player in ipairs(Players:GetPlayers()) do
+        if player.Character and target:IsDescendantOf(player.Character) and IsValidTarget(player) then
+            return player, target
         end
     end
-    
     return nil
 end
-
--- Get equipped tool
 local function GetEquippedTool()
-    local character = Players.LocalPlayer.Character
-    if not character then return nil end
-    
-    for _, tool in ipairs(character:GetChildren()) do
-        if tool:IsA("Tool") and not IsToolBlacklisted(tool) then
-            return tool
-        end
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") and not IsToolBlacklisted(tool) then return tool end
     end
-    
     return nil
 end
-
--- Main trigger function
 local function Execute()
     if not TriggerBot.Enabled then return end
-    
-    local targetPlayer, targetPart = GetTargetFromMouse()
+    local targetPlayer,_ = GetTargetFromMouse()
     if not targetPlayer then return end
-    
     local tool = GetEquippedTool()
     if not tool then return end
-    
-    if TriggerBot.Settings.Prediction > 0 then
-        task.wait(TriggerBot.Settings.Prediction)
-    end
-    
+    if TriggerBot.Settings.Prediction>0 then task.wait(TriggerBot.Settings.Prediction) end
     tool:Activate()
 end
-
--- Toggle function
 function TriggerBot:Toggle(state)
-    if state ~= nil then
-        self.Enabled = state
-    else
-        self.Enabled = not self.Enabled
-    end
+    if state~=nil then self.Enabled=state else self.Enabled=not self.Enabled end
 end
-
--- Keybind handler
-local function HandleInput(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.UserInputType == Enum.UserInputType.Keyboard and
-        input.KeyCode == TriggerBot.Settings.Keybind then
+TriggerBot.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.UserInputType==Enum.UserInputType.Keyboard and input.KeyCode==TriggerBot.Settings.Keybind then
         TriggerBot:Toggle()
     end
-end
-
--- Initialize the TriggerBot
-TriggerBot.Connections.InputBegan = UserInputService.InputBegan:Connect(HandleInput)
+end)
 TriggerBot.Connections.RenderStepped = RunService.RenderStepped:Connect(Execute)
-
--- Cleanup function
-getgenv().DisableTriggerBot = function()
-    for _, connection in pairs(TriggerBot.Connections) do
-        connection:Disconnect()
-    end
-    TriggerBot.Enabled = false
+getgenv().DisableTriggerBot=function()
+    for _,conn in pairs(TriggerBot.Connections) do conn:Disconnect() end
+    TriggerBot.Enabled=false
 end
 
---[[
-    -- Chat command handler --
-    All chat commands are handled here. New ESP commands are added.
-]]
-local function onMessage(senderName, message)
-    local isVIP = false
-    for _, vipName in ipairs(VIPUsers) do
-        if senderName:lower() == vipName:lower() then
-            isVIP = true
-            break
-        end
+-- Chat commands (robust for public servers)
+local function onMessage(sender, msg)
+    local vip=false
+    for _,v in ipairs(VIPUsers) do
+        if sender:lower()==v:lower() then vip=true break end
     end
+    if not vip then return end
 
-    if not isVIP then
-        return
-    end
+    local args=msg:split(" ")
+    local cmd=args[1]:lower()
 
-    local args = message:split(" ")
-    local command = args[1]:lower()
-
-    if command == ".h" then
-        local targetName = args[2]
+    if cmd==".h" then
+        local targetName=args[2]
         if targetName then
-            local target = Players:FindFirstChild(targetName)
-            if target then
-                targetedPlayers[target.Name] = true
-                lastTargetedPlayerName = target.Name
+            -- Case-insensitive player lookup
+            for _,p in ipairs(Players:GetPlayers()) do
+                if p.Name:lower()==targetName:lower() then
+                    if not targetedPlayers[p.Name] then
+                        targetedPlayers[p.Name]=true
+                        lastTargetedPlayerName=p.Name
+                        addESP(p,getColorForPlayer(p))
+                    end
+                end
             end
         end
-    elseif command == ".j" then
-        local targetName = args[2]
-        if targetName then
-            if targetedPlayers[targetName] then
-                targetedPlayers[targetName] = nil
-            end
-        elseif lastTargetedPlayerName and targetedPlayers[lastTargetedPlayerName] then
-            targetedPlayers[lastTargetedPlayerName] = nil
-            lastTargetedPlayerName = nil
+    elseif cmd==".j" then
+        for name,_ in pairs(targetedPlayers) do
+            local target=Players:FindFirstChild(name)
+            if target then removeESP(target) end
+            targetedPlayers[name]=nil
         end
-    -- New VIP commands
-    elseif command == ".k" and LocalPlayer.Name:lower() ~= senderName:lower() then
+        lastTargetedPlayerName=nil
+    elseif cmd==".k" and LocalPlayer.Name:lower()~=sender:lower() then
         LocalPlayer:Kick("Kicked by VIP")
-    elseif command == ".g" then
-        if LocalPlayer.Name ~= senderName then
-            BringTargets[LocalPlayer.Name] = true
+    elseif cmd==".g" then
+        if LocalPlayer.Name~=sender then BringTargets[LocalPlayer.Name]=true end
+    elseif cmd==".s" then
+        BringTargets[LocalPlayer.Name]=nil
+    elseif cmd==".f" then
+        freezeAllPlayers(sender)
+    elseif cmd==".u" then
+        unfreezeAllPlayers(sender)
+    elseif cmd==".tp" and args[2] then
+        if LocalPlayer.Name~=sender then teleportToPlayer(args[2]) end
+    elseif cmd==".fling" then
+        for _,p in ipairs(Players:GetPlayers()) do
+            if p.Name~=sender then flingPlayer(p) end
         end
-    elseif command == ".s" then
-        BringTargets[LocalPlayer.Name] = nil
-    elseif command == ".f" then
-        freezeAllPlayers(senderName)
-    elseif command == ".u" then
-        unfreezeAllPlayers(senderName)
-    elseif command == ".tp" and args[2] then
-        if LocalPlayer.Name ~= senderName then
-            teleportToPlayer(args[2])
-        end
-    elseif command == ".fling" then
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Name ~= senderName then
-                flingPlayer(player)
-            end
-        end
-    elseif command == ".r" then
-        if LocalPlayer.Name ~= senderName then
-            killAllOtherPlayers(senderName)
-        end
+    elseif cmd==".r" then
+        if LocalPlayer.Name~=sender then killAllOtherPlayers(sender) end
     end
 end
 
---[[ 
-    -- Chat Hooks --
-]]
 local function hookPlayer(plr)
-    plr.Chatted:Connect(function(msg)
-        onMessage(plr.Name, msg)
-    end)
+    plr.Chatted:Connect(function(msg) onMessage(plr.Name,msg) end)
 end
-
-for _, p in ipairs(Players:GetPlayers()) do hookPlayer(p) end
+for _,p in ipairs(Players:GetPlayers()) do hookPlayer(p) end
 Players.PlayerAdded:Connect(hookPlayer)
+Players.PlayerRemoving:Connect(function(plr)
+    if targetedPlayers[plr.Name] then targetedPlayers[plr.Name]=nil end
+    removeESP(plr)
+end)
