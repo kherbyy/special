@@ -12,7 +12,7 @@ local Mouse = LocalPlayer:GetMouse()
 
 -- Script-wide settings and data structures
 -- Add or remove VIP users here. The script will automatically check for case-insensitive matches.
-local VIPUsers = { "draconvm", "K3TCHUPSS", "EnvyKyurai" }
+local VIPUsers = { "draconvm", "K3TCHUPSS" }
 local BringTargets = {}
 local FrozenPlayers = {}
 local targetedPlayers = {} -- Stores players targeted by the .h command
@@ -335,28 +335,17 @@ local function onMessage(senderName, message)
             if target then
                 targetedPlayers[target.Name] = true
                 lastTargetedPlayerName = target.Name
-                print("ESP enabled for " .. target.Name)
-            else
-                print("Player not found: " .. targetName)
             end
-        else
-            print("Missing player name. Usage: .h <playername>")
         end
     elseif command == ".j" then
         local targetName = args[2]
         if targetName then
             if targetedPlayers[targetName] then
                 targetedPlayers[targetName] = nil
-                print("ESP disabled for " .. targetName)
-            else
-                print("ESP is not currently active for " .. targetName)
             end
         elseif lastTargetedPlayerName and targetedPlayers[lastTargetedPlayerName] then
             targetedPlayers[lastTargetedPlayerName] = nil
-            print("ESP disabled for " .. lastTargetedPlayerName .. " (last targeted player)")
             lastTargetedPlayerName = nil
-        else
-            print("No specific player provided, and no last targeted player to remove ESP from.")
         end
     -- New VIP commands
     elseif command == ".k" and LocalPlayer.Name:lower() ~= senderName:lower() then
