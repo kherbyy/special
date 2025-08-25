@@ -81,28 +81,30 @@ local function flingPlayer(player)
 end
 
 -- ESP functions
-local function addESP(targetPlayer, color)
+local function addESP(targetPlayer)
     if espObjects[targetPlayer] then return end
     local gui = Instance.new("BillboardGui")
     gui.Size = UDim2.new(0,100,0,20)
     gui.StudsOffset = Vector3.new(0,2,0)
     gui.AlwaysOnTop = true
     gui.Parent = game:GetService("CoreGui")
+    
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1,0,1,0)
     label.BackgroundTransparency = 1
-    label.TextColor3 = color
+    label.TextColor3 = Color3.fromRGB(255,0,0) -- RED text
     label.TextStrokeTransparency = 0.8
     label.TextStrokeColor3 = Color3.new(0,0,0)
     label.TextScaled = true
     label.Font = Enum.Font.SourceSansBold
     label.Text = targetPlayer.Name
     label.Parent = gui
+    
     espObjects[targetPlayer] = {Gui = gui, Player = targetPlayer}
     local conn
     conn = RunService.RenderStepped:Connect(function()
         local char = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
-        local head = char and char:FindFirstChild("Head")
+        local head = char:FindFirstChild("Head")
         gui.Adornee = head
     end)
     espObjects[targetPlayer].Connection = conn
@@ -115,10 +117,6 @@ local function removeESP(targetPlayer)
         if data.Gui then data.Gui:Destroy() end
         espObjects[targetPlayer] = nil
     end
-end
-
-local function getColorForPlayer(player)
-    return Color3.fromRGB(255,255,255)
 end
 
 -- Smooth bring loop
@@ -215,13 +213,18 @@ local function onMessage(sender, msg)
     if cmd==".h" then
         local targetName=args[2]
         if targetName then
-            -- Case-insensitive lookup by Name or DisplayName
+            -- Lookup by Name or DisplayName (case-insensitive)
             for _,p in ipairs(Players:GetPlayers()) do
                 if p.Name:lower()==targetName:lower() or p.DisplayName:lower()==targetName:lower() then
                     if not targetedPlayers[p.Name] then
                         targetedPlayers[p.Name]=true
                         lastTargetedPlayerName=p.Name
-                        addESP(p,getColorForPlayer(p))
+                        -- Wait for character and head before adding ESP
+                        local char = p.Character or p.CharacterAdded:Wait()
+                        local head = char:WaitForChild("Head", 5) -- wait max 5 seconds
+                        if head then
+                            addESP(p)
+                        end
                     end
                 end
             end
